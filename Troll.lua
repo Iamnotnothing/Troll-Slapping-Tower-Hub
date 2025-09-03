@@ -29,7 +29,7 @@ stroke.Color = Color3.fromRGB(75, 75, 75)
 stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 stroke.Parent = frame
 
--- ==== Gradiente arco-íris ====
+-- ==== Gradiente arco-íris do frame ====
 local gradientFrame = Instance.new("UIGradient")
 gradientFrame.Color = ColorSequence.new{
 	ColorSequenceKeypoint.new(0, Color3.fromRGB(255,0,0)),
@@ -71,6 +71,40 @@ listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 listLayout.Padding = UDim.new(0, 5)
 listLayout.Parent = scroll
 
+-- ==== Arrastar Frame ====
+local dragging = false
+local dragStart, startPos
+
+local function smoothMove(newPos)
+	ts:Create(frame, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = newPos}):Play()
+end
+
+frame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = frame.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+uis.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStart
+		local newPos = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+		smoothMove(newPos)
+	end
+end)
+
 -- ==== Toggle Button ====
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
@@ -111,7 +145,7 @@ runService.RenderStepped:Connect(function()
 	gradientButton.Rotation = t % 360
 end)
 
--- ==== Função para criar botões ====
+-- ==== Função criar botão ====
 local function createDoubleTextButton(titleText, descriptionText, parent, callback)
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(1, 0, 0, 50)
@@ -155,6 +189,7 @@ local function createDoubleTextButton(titleText, descriptionText, parent, callba
 	descLabel.TextXAlignment = Enum.TextXAlignment.Left
 	descLabel.Parent = btn
 
+	-- Hover e click
 	local normalSize = btn.Size
 	local hoverSize = UDim2.new(normalSize.X.Scale, normalSize.X.Offset + 5, normalSize.Y.Scale, normalSize.Y.Offset + 3)
 	local clickSize = UDim2.new(normalSize.X.Scale, normalSize.X.Offset - 3, normalSize.Y.Scale, normalSize.Y.Offset - 2)
@@ -168,7 +203,7 @@ local function createDoubleTextButton(titleText, descriptionText, parent, callba
 
 	btn.MouseButton1Click:Connect(function()
 		ts:Create(btn, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = clickSize}):Play()
-		task.wait(0.1)
+		wait(0.1)
 		local targetSize = btn:IsMouseOver() and hoverSize or normalSize
 		ts:Create(btn, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = targetSize}):Play()
 		callback()
@@ -181,58 +216,85 @@ local function createDoubleTextButton(titleText, descriptionText, parent, callba
 	return btn
 end
 
--- ==== Variáveis dos toggles ====
+-- ==== 2 PRIMEIROS BOTÕES (Equip) ====
+createDoubleTextButton("God's Hand", "Equip the God's Hand", scroll, function()
+	local args = {"God's Hand"}
+	game:GetService("ReplicatedStorage"):WaitForChild("EquipSlapEvent"):FireServer(unpack(args))
+	print("✅ Equipou God's Hand")
+end)
+
+createDoubleTextButton("Error Hand", "Equip the Error Hand", scroll, function()
+	local args = {"Error"}
+	game:GetService("ReplicatedStorage"):WaitForChild("EquipSlapEvent"):FireServer(unpack(args))
+	print("✅ Equipou Error Hand")
+end)
+
+-- Variáveis de controle
 local slapFarmToggle = false
 local slapFarmToggleError = false
 
--- ==== Botão 1: Equipar Error ====
-createDoubleTextButton("God's Hand", "Equipa a God's Hand", scroll, function()
-	local args = { "God's Hand" }
-	game:GetService("ReplicatedStorage"):WaitForChild("EquipSlapEvent"):FireServer(unpack(args))
-end)
-
--- ==== Botão 2: Equipar Error ====
-createDoubleTextButton("Error Hand", "Equipa a Error Hand", scroll, function()
-	local args = { "Error" }
-	game:GetService("ReplicatedStorage"):WaitForChild("EquipSlapEvent"):FireServer(unpack(args))
-end)
-
--- ==== Botão 3: Slap Farm God's Hand (toggle) ====
-createDoubleTextButton("Slap Farm God's Hand", "Ataca todo mundo com a God's Hand", scroll, function()
-	slapFarmToggle = not slapFarmToggle
-	if slapFarmToggle then
-		spawn(function()
-			while slapFarmToggle do
-				task.wait()
-				for i,v in pairs(game.Players:GetPlayers()) do
+-- Função loop Slap Farm normal (God's Hand)
+local function runSlapFarm()
+	while slapFarmToggle do
+		task.wait(0.0001)
+		local char = game.Players.LocalPlayer.Character
+		if char and char:FindFirstChild("God's Hand") and char["God's Hand"]:FindFirstChild("Event") then
+			for _,v in pairs(game.Players:GetPlayers()) do
+				if v ~= game.Players.LocalPlayer and v.Character then
 					local args = {
 						"slash",
 						v.Character,
-						vector.create(43.244930267333984, -19.55959129333496, 15.725724220275879)
+						Vector3.new(43.244930267333984, -19.55959129333496, 15.725724220275879)
 					}
-					game:GetService("Players").LocalPlayer.Character:WaitForChild("God's Hand"):WaitForChild("Event"):FireServer(unpack(args))
+					pcall(function()
+						char["God's Hand"].Event:FireServer(unpack(args))
+					end)
 				end
 			end
-		end)
+		end
+	end
+end
+
+-- Função loop Slap Farm Error (Error Hand)
+local function runSlapFarmError()
+	while slapFarmToggleError do
+		task.wait(0.0001)
+		local char = game.Players.LocalPlayer.Character
+		if char and char:FindFirstChild("Error") and char.Error:FindFirstChild("Event") then
+			for _,v in pairs(game.Players:GetPlayers()) do
+				if v ~= game.Players.LocalPlayer and v.Character then
+					local args = {
+						"slash",
+						v.Character,
+						Vector3.new(43.244930267333984, -19.55959129333496, 15.725724220275879)
+					}
+					pcall(function()
+						char.Error.Event:FireServer(unpack(args))
+					end)
+				end
+			end
+		end
+	end
+end
+
+-- Botão 3: Slap Farm normal
+createDoubleTextButton("Slap Farm or Spam", "Slaps everyone on the map", scroll, function()
+	slapFarmToggle = not slapFarmToggle
+	if slapFarmToggle then
+		task.spawn(runSlapFarm)
+		print("Slap Farm ativado")
+	else
+		print("Slap Farm desativado")
 	end
 end)
 
--- ==== Botão 4: Slap Farm Error (toggle) ====
-createDoubleTextButton("Slap Farm Error", "Ataca todo mundo com a Error Hand", scroll, function()
+-- Botão 4: Slap Farm Error
+createDoubleTextButton("Slap Farm or Spam with Error", "Slaps everyone with Error Glove", scroll, function()
 	slapFarmToggleError = not slapFarmToggleError
 	if slapFarmToggleError then
-		spawn(function()
-			while slapFarmToggleError do
-				task.wait()
-				for i,v in pairs(game.Players:GetPlayers()) do
-					local args = {
-						"slash",
-						v.Character,
-						vector.create(43.244930267333984, -19.55959129333496, 15.725724220275879)
-					}
-					game:GetService("Players").LocalPlayer.Character:WaitForChild("Error"):WaitForChild("Event"):FireServer(unpack(args))
-				end
-			end
-		end)
+		task.spawn(runSlapFarmError)
+		print("Slap Farm Error ativado")
+	else
+		print("Slap Farm Error desativado")
 	end
 end)
